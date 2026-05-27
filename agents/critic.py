@@ -17,6 +17,10 @@ class ToolCritic:
         if settings.llm_provider == "anthropic":
             from anthropic import Anthropic
             self.client = Anthropic(api_key=settings.anthropic_api_key)
+        elif settings.llm_provider == "gemini":
+            import google.generativeai as genai
+            genai.configure(api_key=settings.google_api_key)
+            self.client = genai.GenerativeModel(settings.llm_model)
         else:
             from openai import OpenAI
             self.client = OpenAI(api_key=settings.openai_api_key)
@@ -34,16 +38,20 @@ Code:
         log.info("critic.validating")
 
         try:
-            if get_settings().llm_provider == "anthropic":
+            settings = get_settings()
+            if settings.llm_provider == "anthropic":
                 response = self.client.messages.create(
-                    model=get_settings().llm_model,
+                    model=settings.llm_model,
                     max_tokens=2048,
                     messages=[{"role": "user", "content": prompt}],
                 )
                 response_text = response.content[0].text
+            elif settings.llm_provider == "gemini":
+                response = self.client.generate_content(prompt)
+                response_text = response.text
             else:
                 response = self.client.chat.completions.create(
-                    model=get_settings().llm_model,
+                    model=settings.llm_model,
                     max_tokens=2048,
                     messages=[{"role": "user", "content": prompt}],
                 )
