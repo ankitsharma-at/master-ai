@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     tools_dir: str = "./tools"
     reuse_threshold: float = 0.85
     adapt_threshold: float = 0.60
+    enable_direct_llm: bool = True  # Enable direct LLM for simple tasks
     sandbox_timeout_seconds: int = 30
     sandbox_memory_limit: str = "256m"
     sandbox_cpu_limit: float = 0.5

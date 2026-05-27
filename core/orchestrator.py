@@ -10,6 +10,8 @@ from memory.working import WorkingMemoryManager
 from registry.search import ToolSearcher
 from agents.generator import ToolGenerator
 from agents.critic import ToolCritic
+from agents.complexity_evaluator import ComplexityEvaluator
+from agents.direct_llm_executor import DirectLLMExecutor
 from execution.sandbox import SandboxExecutor
 from execution.loader import ToolLoader
 from registry.db import ToolRegistryDB
@@ -25,6 +27,8 @@ class Orchestrator:
         self.searcher = ToolSearcher()
         self.generator = ToolGenerator()
         self.critic = ToolCritic()
+        self.complexity_evaluator = ComplexityEvaluator()
+        self.direct_llm = DirectLLMExecutor()
         self.sandbox = SandboxExecutor()
         self.loader = ToolLoader()
         self.db = ToolRegistryDB()
@@ -42,6 +46,44 @@ class Orchestrator:
             intent = await parse_intent(user_input)
             self.working.create(session_id, intent)
 
+            # Evaluate task complexity
+            complexity = await self.complexity_evaluator.evaluate(user_input, intent)
+            log.info(
+                "complexity.decision",
+                complexity=complexity.get("complexity"),
+                recommendation=complexity.get("recommendation"),
+            )
+
+            # Direct LLM path for simple tasks
+            if complexity.get("recommendation") == "direct_llm":
+                log.info("orchestrator.direct_llm_path")
+                result = await self.direct_llm.execute(user_input, intent)
+
+                runtime_ms = int((time.monotonic() - start) * 1000)
+                await self.episodic.store(
+                    session_id=session_id,
+                    user_input=user_input,
+                    tool_used="direct_llm",
+                    tool_result=result.get("output"),
+                    match_type="direct_llm",
+                    similarity_score=0.0,
+                    runtime_ms=runtime_ms,
+                    success=result.get("success", False),
+                )
+
+                return {
+                    "session_id": session_id,
+                    "result": result.get("output"),
+                    "tool_used": "direct_llm",
+                    "tool_version": "n/a",
+                    "match_type": "direct_llm",
+                    "complexity": complexity.get("complexity"),
+                    "reasoning": complexity.get("reasoning"),
+                    "runtime_ms": runtime_ms,
+                    "success": result.get("success", False),
+                }
+
+            # Tool-based path for complex tasks
             # Search for similar tools
             search_result = await self.searcher.find(intent.get("description", ""))
             settings = get_settings()
@@ -96,6 +138,7 @@ class Orchestrator:
                 "tool_used": tool.name,
                 "tool_version": tool.version,
                 "match_type": route.match_type,
+                "complexity": complexity.get("complexity"),
                 "runtime_ms": runtime_ms,
                 "success": result.success,
             }
