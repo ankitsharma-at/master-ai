@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - LLM_PROVIDER=${LLM_PROVIDER:-anthropic}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - LLM_MODEL=${LLM_MODEL:-claude-sonnet-4-20250514}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-all-MiniLM-L6-v2}
+      - REUSE_THRESHOLD=${REUSE_THRESHOLD:-0.85}
+      - ADAPT_THRESHOLD=${ADAPT_THRESHOLD:-0.60}
+      - ENABLE_DIRECT_LLM=${ENABLE_DIRECT_LLM:-true}
+      - SANDBOX_TIMEOUT_SECONDS=${SANDBOX_TIMEOUT_SECONDS:-30}
+      - SANDBOX_MEMORY_LIMIT=${SANDBOX_MEMORY_LIMIT:-256m}
+      - DOCKER_IMAGE=${DOCKER_IMAGE:-python:3.11-slim}
+    volumes:
+      - ./tools:/app/tools
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - supabase
+
+  supabase:
+    image: supabase/postgres:15.1.0.147
+    environment:
+      POSTGRES_PASSWORD: your-super-secret-password
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
