@@ -43,7 +43,7 @@ Your Supabase database already has:
 
 **Option A: Direct Python**
 ```bash
-uvicorn api.main:app --reload --port 8000
+uvicorn api.main:app --reload --port 8000 --reload-dir api --reload-dir core
 ```
 
 **Option B: Docker**
@@ -68,7 +68,14 @@ curl -X POST http://localhost:8000/task/ \
     "command": "Create a JSON formatter that pretty-prints JSON data"
   }'
 ```
-
+# for direct LLM testing
+```bash
+curl -X POST http://localhost:8000/task/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "command": "What is recursion ?"
+  }'
+```
 Expected response:
 ```json
 {

@@ -16,8 +16,14 @@ class ToolLoader:
     def save(self, tool: ToolRecord, code: str):
         """Save tool code to disk."""
         Path(tool.code_path).parent.mkdir(parents=True, exist_ok=True)
-        with open(tool.code_path, "w") as f:
-            f.write(code)
+        if code.strip().startswith("```"):
+            log.warning(
+         "loader.markdown_detected",
+        tool=tool.name
+    )
+
+        with open(tool.code_path, "w", encoding="utf-8") as f:
+          f.write(code)
         log.info("loader.saved", tool=tool.name)
 
     def load(self, tool: ToolRecord) -> str:

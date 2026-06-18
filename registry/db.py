@@ -49,18 +49,35 @@ class ToolRegistryDB:
         return await self.get(tool_id)
 
     async def get(self, tool_id: str) -> Optional[ToolRecord]:
-        """Get a tool by ID."""
-        response = self.supabase.table("tools").select("*").eq("id", tool_id).maybeSingle().execute()
+        response = (
+        self.supabase
+        .table("tools")
+        .select("*")
+        .eq("id", tool_id)
+        .limit(1)
+        .execute()
+    )
+
         if not response.data:
-            return None
-        return self._row_to_record(response.data)
+             return None
+
+        return self._row_to_record(response.data[0])
 
     async def get_by_name(self, name: str) -> Optional[ToolRecord]:
-        """Get a tool by name."""
-        response = self.supabase.table("tools").select("*").eq("name", name).maybeSingle().execute()
+        response = (
+            self.supabase
+            .table("tools")
+            .select("*")
+            .eq("name", name)
+            .limit(1)
+            .execute()
+        )
+
         if not response.data:
             return None
-        return self._row_to_record(response.data)
+
+        return self._row_to_record(response.data[0])
+        
 
     async def list(self, category: Optional[str] = None, status: str = "active") -> List[ToolRecord]:
         """List tools filtered by category and status."""

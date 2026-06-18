@@ -5,6 +5,7 @@ import os
 import structlog
 from core.config import get_settings
 from registry.schemas import ToolRecord
+import traceback
 
 log = structlog.get_logger()
 
@@ -29,7 +30,7 @@ class SandboxExecutor:
         """Execute tool in sandbox."""
         if not self.client:
             return await self._run_local(code, inputs)
-
+        
         with tempfile.TemporaryDirectory() as tmpdir:
             with open(os.path.join(tmpdir, "tool.py"), "w") as f:
                 f.write(code)
@@ -62,15 +63,32 @@ print(json.dumps(run(inputs)))
                 result = json.loads(output.decode().strip())
                 return ExecutionResult(result.get("success", False), result.get("output"), result.get("error"))
             except Exception as e:
-                log.error("sandbox.error", err=str(e))
-                return ExecutionResult(False, None, str(e))
+                
+                log.error(
+                    "sandbox.error",
+                    error=str(e),
+                    traceback=traceback.format_exc()
+                )
 
-    async def _run_local(self, code: str, inputs: dict) -> ExecutionResult:
-        """Fallback: execute locally."""
+    async def _run_local(self, code: str, inputs: dict):
         try:
             exec_globals = {}
+
             exec(code, exec_globals)
-            result = exec_globals.get("run")(inputs)
-            return ExecutionResult(result.get("success", False), result.get("output"), result.get("error"))
+
+            result = exec_globals["run"](inputs)
+
+            return ExecutionResult(
+            result.get("success", False),
+            result.get("output"),
+            result.get("error"),
+            )
+
         except Exception as e:
+            log.error(
+                "sandbox.local_error",
+                error=str(e),
+                traceback=traceback.format_exc(),
+        )
+
             return ExecutionResult(False, None, str(e))

@@ -18,7 +18,12 @@ def route_request(search_result: ToolSearchResult, settings) -> RouteDecision:
         return RouteDecision("generate", 0.0)
 
     score = search_result.similarity_score
-
+    log.info(
+    "router.thresholds",
+    score=score,
+    reuse_threshold=settings.reuse_threshold,
+    adapt_threshold=settings.adapt_threshold,
+    )
     if score >= settings.reuse_threshold:
         log.info("router.reuse", score=round(score, 3))
         return RouteDecision("reuse", score)

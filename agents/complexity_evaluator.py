@@ -3,6 +3,7 @@ import json
 import re
 import structlog
 from core.config import get_settings
+from core.gemini_service import GeminiService
 
 log = structlog.get_logger()
 
@@ -17,9 +18,9 @@ class ComplexityEvaluator:
             from anthropic import Anthropic
             self.client = Anthropic(api_key=settings.anthropic_api_key)
         elif settings.llm_provider == "gemini":
-            import google.generativeai as genai
-            genai.configure(api_key=settings.google_api_key)
-            self.client = genai.GenerativeModel(settings.llm_model)
+            from core.gemini_service import GeminiService
+            
+            self.client = GeminiService()
         else:
             from openai import OpenAI
             self.client = OpenAI(api_key=settings.openai_api_key)
@@ -75,7 +76,7 @@ Respond with ONLY JSON (no markdown):
                 )
                 response_text = response.content[0].text
             elif settings.llm_provider == "gemini":
-                response = self.client.generate_content(prompt)
+                response = self.client.generate(prompt)
                 response_text = response.text
             else:
                 response = self.client.chat.completions.create(
@@ -84,7 +85,9 @@ Respond with ONLY JSON (no markdown):
                     messages=[{"role": "user", "content": prompt}],
                 )
                 response_text = response.choices[0].message.content
-
+            print("\n=== COMPLEXITY RAW RESPONSE ===")
+            print(response_text)
+            print("==============================\n")
             json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
             if json_match:
                 result = json.loads(json_match.group())

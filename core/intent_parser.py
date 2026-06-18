@@ -3,7 +3,7 @@ import json
 import re
 import structlog
 from core.config import get_settings
-
+from core.gemini_service import GeminiService
 log = structlog.get_logger()
 
 
@@ -17,19 +17,39 @@ class IntentParser:
             from anthropic import Anthropic
             self.client = Anthropic(api_key=settings.anthropic_api_key)
         elif settings.llm_provider == "gemini":
-            import google.generativeai as genai
-            genai.configure(api_key=settings.google_api_key)
-            self.client = genai.GenerativeModel(settings.llm_model)
+            
+            
+            self.client = GeminiService()
         else:
             from openai import OpenAI
             self.client = OpenAI(api_key=settings.openai_api_key)
 
     async def parse(self, user_input: str) -> dict:
         """Convert NL to structured intent."""
-        prompt = f"""Extract intent from command. Respond with ONLY JSON (no markdown):
-{{"name": "tool_name_snake_case", "description": "...", "category": "workflow", "inputs": {{}}, "dependencies": []}}
+        prompt = f"""
+Extract intent from the command.
 
-Command: {user_input}"""
+Return ONLY valid JSON.
+
+Rules:
+- inputs must contain ACTUAL VALUES extracted from the command.
+- Never generate input schemas.
+- Never generate fields like type, description, required, default.
+- If no actual values are present, return an empty object for inputs.
+
+Format:
+
+{{
+  "name": "tool_name_snake_case",
+  "description": "...",
+  "category": "workflow",
+  "inputs": {{}},
+  "dependencies": []
+}}
+
+Command:
+{user_input}
+"""
 
         try:
             settings = get_settings()
@@ -41,8 +61,24 @@ Command: {user_input}"""
                 )
                 response_text = response.content[0].text
             elif settings.llm_provider == "gemini":
-                response = self.client.generate_content(prompt)
-                response_text = response.text
+                response = self.client.generate(prompt)
+                log.info(
+                    "gemini.response.debug",
+                    response_type=type(response).__name__,
+                    response_repr=repr(response)
+                    )
+
+                response_text = getattr(response, "text", None)
+
+                log.info(
+                    "gemini.text.debug",
+                    text_type=type(response_text).__name__,
+                    text_repr=repr(response_text)
+                )
+                if not isinstance(response_text, str):
+                    raise ValueError(
+                    f"Gemini returned non-string text: {type(response_text).__name__}"
+                    )
             else:
                 response = self.client.chat.completions.create(
                     model=settings.llm_model,
@@ -50,14 +86,44 @@ Command: {user_input}"""
                     messages=[{"role": "user", "content": prompt}],
                 )
                 response_text = response.choices[0].message.content
+            # intent = json.loads(response_text)
 
-            json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
+            cleaned = response_text.strip()
+
+            cleaned = cleaned.replace("`json", "")
+            cleaned = cleaned.replace("```json", "")
+            cleaned = cleaned.replace("```", "")
+            cleaned = cleaned.replace("`", "")
+            cleaned = cleaned.strip()
+            cleaned = re.sub(
+                r"^```(?:json)?|```$",
+                "",
+                cleaned,
+                flags=re.MULTILINE
+            ).strip()
+
+            json_match = re.search(
+                r"\{.*\}",
+                cleaned,
+                re.DOTALL
+            )
+
             if json_match:
-                return json.loads(json_match.group())
-            return json.loads(response_text)
+                intent = json.loads(json_match.group())
+
+                log.info(
+                "intent.parsed",
+                intent=intent
+                )
+
+                return intent
+
+            return json.loads(cleaned)
+            
         except Exception as e:
             log.error("intent_parser.error", err=str(e))
-            return {"description": user_input, "name": "tool", "category": "workflow", "inputs": {}}
+            return {"description": user_input, "name": "tool", "category": "workflow", "inputs": {},"dependencies": []
+}
 
 
 async def parse_intent(user_input: str) -> dict:

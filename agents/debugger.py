@@ -1,6 +1,7 @@
 """Autonomous debug agent for fixing tool errors."""
 import structlog
 from core.config import get_settings
+from core.gemini_service import GeminiService
 
 log = structlog.get_logger()
 settings = get_settings()
@@ -12,17 +13,9 @@ class ToolDebugger:
 
     def _init_llm(self):
         if settings.llm_provider == "anthropic":
-            from anthropic import Anthropic
-            self.client = Anthropic(api_key=settings.anthropic_api_key)
-        else:
-            from openai import OpenAI
-            self.client = OpenAI(api_key=settings.openai_api_key)
-
-    async def fix(self, code: str, errors: list) -> str:
-        """Fix identified errors in tool code."""
-        error_text = "\n".join(
-            [f"- [{e.get('severity', 'unknown').upper()}] {e.get('message', 'Unknown error')}" for e in errors]
-        )
+            from anthropic import Anthropicmaster
+        elif settings.llm_provider == "gemini":
+            self.client = GeminiService()
 
         prompt = f"""You are an expert debugger. Fix these errors in the code.
 
@@ -43,6 +36,8 @@ Output ONLY the corrected Python code. No markdown fences. No explanation."""
                 messages=[{"role": "user", "content": prompt}],
             )
             fixed_code = response.content[0].text
+        elif settings.llm_provider == "gemini":
+            response = self.client.generate( prompt )
         else:
             response = self.client.chat.completions.create(
                 model=settings.llm_model,

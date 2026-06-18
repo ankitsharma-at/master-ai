@@ -4,6 +4,7 @@ import re
 import structlog
 from registry.schemas import CriticResult
 from core.config import get_settings
+from core.gemini_service import GeminiService
 
 log = structlog.get_logger()
 
@@ -18,9 +19,7 @@ class ToolCritic:
             from anthropic import Anthropic
             self.client = Anthropic(api_key=settings.anthropic_api_key)
         elif settings.llm_provider == "gemini":
-            import google.generativeai as genai
-            genai.configure(api_key=settings.google_api_key)
-            self.client = genai.GenerativeModel(settings.llm_model)
+            self.client = GeminiService()
         else:
             from openai import OpenAI
             self.client = OpenAI(api_key=settings.openai_api_key)
@@ -47,7 +46,7 @@ Code:
                 )
                 response_text = response.content[0].text
             elif settings.llm_provider == "gemini":
-                response = self.client.generate_content(prompt)
+                response = self.client.generate(prompt)
                 response_text = response.text
             else:
                 response = self.client.chat.completions.create(

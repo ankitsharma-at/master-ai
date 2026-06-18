@@ -8,7 +8,8 @@ class EpisodicEntry(BaseModel):
     session_id: str
     turn: int
     user_input: str
-    tool_used: Optional[str] = None
+    tool_id: Optional[str] = None
+    execution_mode: str = "direct_llm"
     tool_result: Any = None
     match_type: str = ""
     similarity_score: float = 0.0

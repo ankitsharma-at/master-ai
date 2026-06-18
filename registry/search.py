@@ -28,7 +28,8 @@ class ToolSearcher:
 
         if not response.data or len(response.data) == 0:
             return None
-
+        print("RPC DATA:", response.data)
+        print("TYPE:", type(response.data))
         best_result = response.data[0]
         tool_id = best_result.get("tool_id")
         similarity_score = best_result.get("similarity", 0.0)

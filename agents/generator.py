@@ -3,6 +3,8 @@ import json
 import structlog
 from typing import Tuple
 from core.config import get_settings
+from core.gemini_service import GeminiService
+import re
 
 log = structlog.get_logger()
 
@@ -17,9 +19,7 @@ class ToolGenerator:
             from anthropic import Anthropic
             self.client = Anthropic(api_key=settings.anthropic_api_key)
         elif settings.llm_provider == "gemini":
-            import google.generativeai as genai
-            genai.configure(api_key=settings.google_api_key)
-            self.client = genai.GenerativeModel(settings.llm_model)
+            self.client = GeminiService()
         else:
             from openai import OpenAI
             self.client = OpenAI(api_key=settings.openai_api_key)
@@ -29,7 +29,16 @@ class ToolGenerator:
         spec = json.dumps(intent, indent=2)
         prompt = f"""Write a Python tool with run(inputs: dict) -> dict that {intent.get('description', '')}.
 Return {{"success": bool, "output": any, "error": str}}.
-Include error handling. Output ONLY raw Python code.
+Include error handling..
+Write a Python tool.
+
+IMPORTANT:
+- Return ONLY executable Python code.
+- DO NOT use markdown.
+- DO NOT use ```python fences.
+- DO NOT use ``` fences.
+- First line must be Python code.
+- Last line must be Python code.
 
 Task: {spec}"""
 
@@ -44,8 +53,18 @@ Task: {spec}"""
             )
             code = response.content[0].text
         elif settings.llm_provider == "gemini":
-            response = self.client.generate_content(prompt)
+            response = self.client.generate(prompt)
             code = response.text
+            code = self._clean_code(code)
+
+            try:
+              self._validate_code(code)
+            except SyntaxError as e:
+                log.error(
+                "generator.invalid_code",
+                error=str(e)
+            )
+                raise
         else:
             response = self.client.chat.completions.create(
                 model=settings.llm_model,
@@ -53,7 +72,7 @@ Task: {spec}"""
                 messages=[{"role": "user", "content": prompt}],
             )
             code = response.choices[0].message.content
-
+            
         tool_meta = {
             "name": intent.get("name", "generated_tool"),
             "description": intent.get("description", ""),
@@ -63,3 +82,22 @@ Task: {spec}"""
 
         log.info("generator.code_generated", lines=len(code.split("\n")))
         return code, tool_meta
+    def _clean_code(self, code: str) -> str:
+        code = code.strip()
+
+        code = re.sub(
+            r"^```(?:python|py)?\s*",
+            "",
+            code,
+            flags=re.IGNORECASE,
+        )
+
+        code = re.sub(
+            r"\s*```$",
+            "",
+            code,
+        )
+
+        return code.strip()
+    def _validate_code(self, code: str):
+        compile(code, "<generated_tool>", "exec")
