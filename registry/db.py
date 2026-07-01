@@ -129,3 +129,9 @@ class ToolRegistryDB:
             created_at=datetime.fromisoformat(row["created_at"]) if row.get("created_at") else datetime.utcnow(),
             updated_at=datetime.fromisoformat(row["updated_at"]) if row.get("updated_at") else datetime.utcnow(),
         )
+    async def update_schema(self, tool_id: str, input_schema: dict) -> None:
+         """Persist the input_schema for an existing tool after first execution."""
+         await self.supabase.table("tools").update(
+             {"input_schema": input_schema}
+         ).eq("id", tool_id).execute()
+ 
